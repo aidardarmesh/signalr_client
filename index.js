@@ -25,7 +25,7 @@ async function start() {
       .build();
 
     // Receive messages on 'ReceiveMessage' event (or your event name)
-    connection.on('ReceiveMessage', (message) => {
+    connection.on('NewMessage', (message) => {
       console.log('Received message:', message);
     });
 
