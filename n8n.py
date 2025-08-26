@@ -35,7 +35,7 @@ def extract_event_info(event_emitter) -> tuple[Optional[str], Optional[str]]:
 
 class Pipe:
     class Valves(BaseModel):
-        n8n_url: str = Field(default="https://n8n.adnoc.ae/webhook/c1_contracts_uat")
+        n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook/89eb153f-fa56-4881-be76-50d65dd55337")
         n8n_bearer_token: str = Field(default="...")
         input_field: str = Field(default="chatInput")
         response_field: str = Field(default="contentItems")
@@ -105,7 +105,7 @@ class Pipe:
             try:
                 # Invoke N8N workflow
                 headers = {
-                    "Authorization": "Basic <KEY>",
+                    # "Authorization": "Basic <KEY>",
                     "Content-Type": "application/json",
                 }
                 payload = {
