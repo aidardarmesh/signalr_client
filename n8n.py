@@ -9,6 +9,7 @@ import time
 import requests
 from fastapi import Request
 import json
+from pprint import pprint
 
 import re
 
@@ -35,7 +36,7 @@ def extract_event_info(event_emitter) -> tuple[Optional[str], Optional[str]]:
 
 class Pipe:
     class Valves(BaseModel):
-        n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook/89eb153f-fa56-4881-be76-50d65dd55337")
+        n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook-test/89eb153f-fa56-4881-be76-50d65dd55337")
         n8n_bearer_token: str = Field(default="...")
         input_field: str = Field(default="chatInput")
         response_field: str = Field(default="contentItems")
@@ -97,7 +98,7 @@ class Pipe:
         chat_id, _ = extract_event_info(__event_emitter__)
         messages = body.get("messages", [])
 
-        oauth_id_token = extract_oauth_id_token(str(__request__.headers["cookie"]))
+        #oauth_id_token = extract_oauth_id_token(str(__request__.headers["cookie"]))
 
         # Verify a message is available
         if messages:
@@ -112,7 +113,7 @@ class Pipe:
                     "input": {
                         "conversationId": f"{chat_id}",
                         "user": json.dumps(__user__["email"]),
-                        "oauth_id_token": oauth_id_token,
+                        #"oauth_id_token": oauth_id_token,
                         "message": question,
                     }
                 }
