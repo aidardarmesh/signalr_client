@@ -69,6 +69,7 @@ class Pipe:
             ]
 
     def pipe(
+        self,
         body: dict,
         __request__: Request,
         __user__: Optional[dict] = None,
