@@ -4,14 +4,24 @@ adnoc n8n pipe
 
 from typing import Optional, Callable, Awaitable
 from pydantic import BaseModel, Field
-import os
 import time
 import requests
 from fastapi import Request
 import json
-from pprint import pprint
-
+from azure.cosmos import CosmosClient
+import asyncio
 import re
+import logging
+
+
+# Get the HTTP logging policy logger from the Azure SDK
+logger = logging.getLogger("azure.core.pipeline.policies.http_logging_policy")
+
+# Set the logging level to WARNING or ERROR to suppress INFO and DEBUG logs
+logger.setLevel(logging.WARNING)
+
+# Alternatively, to disable logging altogether:
+# logger.disabled = True
 
 
 def extract_oauth_id_token(text):
@@ -41,7 +51,7 @@ class Pipe:
         input_field: str = Field(default="chatInput")
         response_field: str = Field(default="contentItems")
         emit_interval: float = Field(
-            default=2.0, description="Interval in seconds between status emissions"
+            default=1.0, description="Interval in seconds between status emissions"
         )
         enable_status_indicator: bool = Field(
             default=True, description="Enable or disable status indicator emissions"
@@ -53,7 +63,15 @@ class Pipe:
         self.name = "c1 Contracts [UAT]"
         self.valves = self.Valves()
         self.last_emit_time = 0
-        pass
+
+        endpoint = "https://dbadnocgpt.documents.azure.com:443/"
+        key = ""
+        database_name = "my-database"
+        container_name = "my-container"
+
+        self.client = CosmosClient(endpoint, key)
+        self.container = self.client.get_database_client(database_name).get_container_client(container_name)
+        self.seen_statuses = set()
 
     async def emit_status(
         self,
@@ -121,6 +139,27 @@ class Pipe:
                 response = requests.post(
                     self.valves.n8n_url, json=payload, headers=headers, timeout=120
                 )
+
+                # while response status isn't 200, you need to fetch statuses from CosmosDB and emit them
+                while True:
+                    # Query latest status from Cosmos DB
+                    query = f"SELECT TOP 1 * FROM c WHERE c.session_id = '{chat_id}' ORDER BY c._ts DESC"
+                    # query = f"SELECT TOP 1 * FROM c ORDER BY c._ts DESC"
+                    items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
+                    if items:
+                        latest_status = items[0]
+                        agent_name = latest_status['agent_name']
+                        print(latest_status)
+                        # Emit the latest status
+                        if self.valves.enable_status_indicator:
+                            await self.emit_status(__event_emitter__, "info", f"Latest status: {agent_name}", False)
+                            self.seen_statuses.add(latest_status["id"])
+                    else:
+                        if self.valves.enable_status_indicator:
+                            await self.emit_status(__event_emitter__, "info", "Thinking...", False)
+                    # Add a termination condition here if needed, else keep polling
+                    await asyncio.sleep(self.valves.emit_interval)
+
                 if response.status_code == 200:
                     n8n_response = response.json()[self.valves.response_field]
                 else:
