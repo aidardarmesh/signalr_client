@@ -89,15 +89,19 @@ class Pipe:
         post_n8n_task = asyncio.create_task(self.post_n8n_workflow(question, chat_id, __user__))
         status_polling_task = asyncio.create_task(self.poll_cosmos(chat_id, __event_emitter__))
 
-        # Wait for the POST task to complete
-        n8n_response = await post_n8n_task
-
-        # When POST is done, cancel the polling task
-        status_polling_task.cancel()
         try:
-            await status_polling_task
-        except asyncio.CancelledError as e:
-            pass
+            # Wait for the POST task to complete
+            n8n_response = await post_n8n_task
+        finally:
+            # Ensure polling task is cancelled regardless of what happens
+            if not status_polling_task.done():
+                status_polling_task.cancel()
+                # Wait for cancellation to complete with a timeout
+                try:
+                    await asyncio.wait_for(status_polling_task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    # If we hit timeout, the task might be stuck
+                    pass
 
         # Initialize variables
         #text_response = None
@@ -133,12 +137,16 @@ class Pipe:
             return response.json()
 
     async def poll_cosmos(self, chat_id, __event_emitter__):
-        async with CosmosClient(self.endpoint, self.key) as cosmos_client:
-            database = cosmos_client.get_database_client(self.database_name)
-            container = database.get_container_client(self.container_name)
+        try:
+            async with CosmosClient(self.endpoint, self.key) as cosmos_client:
+                database = cosmos_client.get_database_client(self.database_name)
+                container = database.get_container_client(self.container_name)
 
-            try:
                 while True:
+                    # Check for cancellation at each iteration
+                    if asyncio.current_task().cancelled():
+                        return
+
                     query = f"SELECT TOP 1 * FROM c WHERE c.session_id = '{chat_id}' ORDER BY c._ts DESC"
                     items = []
                     try:
@@ -155,8 +163,10 @@ class Pipe:
                     else:
                         await self.emit_status(__event_emitter__, "info", "Thinking...", False)
                     await asyncio.sleep(self.valves.emit_interval)
-            except asyncio.CancelledError:
-                return
+        except asyncio.CancelledError:
+            # Just allow the cancellation to propagate up
+            # This ensures the context manager closes properly
+            raise
 
     async def emit_status(
         self,
