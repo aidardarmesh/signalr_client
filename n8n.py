@@ -49,7 +49,8 @@ class Pipe:
         n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook-test/89eb153f-fa56-4881-be76-50d65dd55337")
         n8n_bearer_token: str = Field(default="...")
         input_field: str = Field(default="chatInput")
-        response_field: str = Field(default="contentItems")
+        # response_field: str = Field(default="contentItems")
+        response_field: str = Field(default="output")
         emit_interval: float = Field(
             default=1.0, description="Interval in seconds between status emissions"
         )
