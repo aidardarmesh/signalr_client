@@ -12,6 +12,7 @@ from azure.cosmos import CosmosClient
 import asyncio
 import re
 import logging
+import httpx
 
 
 # Get the HTTP logging policy logger from the Azure SDK
@@ -161,12 +162,7 @@ class Pipe:
                     # Add a termination condition here if needed, else keep polling
                     await asyncio.sleep(self.valves.emit_interval)
 
-                if response.status_code == 200:
-                    n8n_response = response.json()[self.valves.response_field]
-                else:
-                    raise Exception(f"Error: {response.status_code} - {response.text}")
-
-                # Set assitant message with chain reply
+                n8n_response = response.json()[self.valves.response_field]
                 body["messages"].append({"role": "assistant", "content": n8n_response})
             except Exception as e:
                 await self.emit_status(
