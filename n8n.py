@@ -66,14 +66,10 @@ class Pipe:
         self.valves = self.Valves()
         self.last_emit_time = 0
 
-        endpoint = "https://dbadnocgpt.documents.azure.com:443/"
-        key = ""
-        database_name = "my-database"
-        container_name = "my-container"
-
-        self.client = CosmosClient(endpoint, key)
-        self.container = self.client.get_database_client(database_name).get_container_client(container_name)
-        self.seen_statuses = set()
+        self.endpoint = "https://dbadnocgpt.documents.azure.com:443/"
+        self.key = ""
+        self.database_name = "my-database"
+        self.container_name = "my-container"
 
     async def emit_status(
         self,
@@ -162,7 +158,11 @@ class Pipe:
                     # Add a termination condition here if needed, else keep polling
                     await asyncio.sleep(self.valves.emit_interval)
 
-                n8n_response = response.json()[self.valves.response_field]
+                if response.status_code == 200:
+                    n8n_response = response.json()[self.valves.response_field]
+                else:
+                    raise Exception(f"Error: {response.status_code} - {response.text}")
+                
                 body["messages"].append({"role": "assistant", "content": n8n_response})
             except Exception as e:
                 await self.emit_status(
