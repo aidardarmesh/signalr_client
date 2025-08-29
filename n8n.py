@@ -48,7 +48,7 @@ class Pipe:
         self.last_emit_time = 0
 
         self.endpoint = "https://dbadnocgpt.documents.azure.com:443/"
-        self.key = ""
+        self.key = "uLO7CKicLpAtRQZD8lyyjE8ccWVAZdcc7pwXXnxeCnBvtAsUihpt2M4y9RVdP8heavPrypPT9F5XACDbE9poVw=="
         self.database_name = "my-database"
         self.container_name = "my-container"
 
@@ -143,8 +143,8 @@ class Pipe:
             query = f"SELECT TOP 1 * FROM c WHERE c.session_id = '{chat_id}' ORDER BY c._ts DESC"
             items = []
             try:
-                # Async query_items returns an async iterable
-                items = list(container.query_items(query=query))
+                items_async_iterable = container.query_items(query=query)
+                items = [item async for item in items_async_iterable]
             except CosmosHttpResponseError as e:
                 await self.emit_status(__event_emitter__, "error", f"Cosmos query error: {str(e)}", False)
             
