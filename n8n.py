@@ -28,7 +28,7 @@ logger.setLevel(logging.WARNING)
 
 class Pipe:
     class Valves(BaseModel):
-        n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook-test/89eb153f-fa56-4881-be76-50d65dd55337")
+        n8n_url: str = Field(default="https://adarmesh20.app.n8n.cloud/webhook/89eb153f-fa56-4881-be76-50d65dd55337")
         n8n_bearer_token: str = Field(default="...")
         input_field: str = Field(default="chatInput")
         # response_field: str = Field(default="contentItems")
@@ -86,25 +86,18 @@ class Pipe:
         question = messages[-1]["content"]
         n8n_response = None
 
-        async with CosmosClient(self.endpoint, self.key) as cosmos_client:
-            database = cosmos_client.get_database_client(self.database_name)
-            container = database.get_container_client(self.container_name)
+        post_n8n_task = asyncio.create_task(self.post_n8n_workflow(question, chat_id, __user__))
+        status_polling_task = asyncio.create_task(self.poll_cosmos(chat_id, __event_emitter__))
 
-            async with httpx.AsyncClient() as http_client:
-                post_n8n_task = asyncio.create_task(
-                    self.post_n8n_workflow(http_client, question, chat_id, __user__)
-                )
-                status_polling_task = asyncio.create_task(self.poll_cosmos(container, chat_id, __event_emitter__))
+        # Wait for the POST task to complete
+        n8n_response = await post_n8n_task
 
-                # Wait for the POST task to complete
-                n8n_response = await post_n8n_task
-
-                # When POST is done, cancel the polling task
-                status_polling_task.cancel()
-                try:
-                    await status_polling_task
-                except asyncio.CancelledError as e:
-                    pass
+        # When POST is done, cancel the polling task
+        status_polling_task.cancel()
+        try:
+            await status_polling_task
+        except asyncio.CancelledError as e:
+            pass
 
         # Initialize variables
         #text_response = None
@@ -121,7 +114,7 @@ class Pipe:
         )
         return str(text_response)
     
-    async def post_n8n_workflow(self, http_client, question, chat_id, __user__):
+    async def post_n8n_workflow(self, question, chat_id, __user__):
         headers = {
             # "Authorization": "Basic <KEY>",
             "Content-Type": "application/json",
@@ -134,28 +127,36 @@ class Pipe:
                 "message": question,
             }
         }
-        response = await http_client.post(self.valves.n8n_url, json=payload, headers=headers, timeout=120)
-        response.raise_for_status()
-        return response.json()
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(self.valves.n8n_url, json=payload, headers=headers, timeout=120)
+            response.raise_for_status()
+            return response.json()
 
-    async def poll_cosmos(self, container, chat_id, __event_emitter__):
-        while True:
-            query = f"SELECT TOP 1 * FROM c WHERE c.session_id = '{chat_id}' ORDER BY c._ts DESC"
-            items = []
+    async def poll_cosmos(self, chat_id, __event_emitter__):
+        async with CosmosClient(self.endpoint, self.key) as cosmos_client:
+            database = cosmos_client.get_database_client(self.database_name)
+            container = database.get_container_client(self.container_name)
+
             try:
-                items_async_iterable = container.query_items(query=query)
-                items = [item async for item in items_async_iterable]
-            except CosmosHttpResponseError as e:
-                await self.emit_status(__event_emitter__, "error", f"Cosmos query error: {str(e)}", False)
-            
-            if items:
-                latest_status = items[0]
-                agent_name = latest_status["agent_name"]
-                print(agent_name)
-                await self.emit_status(__event_emitter__, "info", f"Latest status: {agent_name}", False)
-            else:
-                await self.emit_status(__event_emitter__, "info", "Thinking...", False)
-            await asyncio.sleep(self.valves.emit_interval)
+                while True:
+                    query = f"SELECT TOP 1 * FROM c WHERE c.session_id = '{chat_id}' ORDER BY c._ts DESC"
+                    items = []
+                    try:
+                        items_async_iterable = container.query_items(query=query)
+                        items = [item async for item in items_async_iterable]
+                    except CosmosHttpResponseError as e:
+                        await self.emit_status(__event_emitter__, "error", f"Cosmos query error: {str(e)}", False)
+                    
+                    if items:
+                        latest_status = items[0]
+                        agent_name = latest_status["agent_name"]
+                        print(agent_name)
+                        await self.emit_status(__event_emitter__, "info", f"Latest status: {agent_name}", False)
+                    else:
+                        await self.emit_status(__event_emitter__, "info", "Thinking...", False)
+                    await asyncio.sleep(self.valves.emit_interval)
+            except asyncio.CancelledError:
+                return
 
     async def emit_status(
         self,
