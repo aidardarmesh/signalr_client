@@ -64,10 +64,10 @@ class Pipe:
         await self.emit_status(
             __event_emitter__, "info", "/Calling N8N Workflow...", False
         )
-        chat_id, _ = extract_event_info(__event_emitter__)
+        chat_id, _ = await extract_event_info(__event_emitter__)
         messages = body.get("messages", [])
 
-        #oauth_id_token = extract_oauth_id_token(str(__request__.headers["cookie"]))
+        #oauth_id_token = await extract_oauth_id_token(str(__request__.headers["cookie"]))
 
         if not messages:
             await self.emit_status(
@@ -187,7 +187,7 @@ class Pipe:
             self.last_emit_time = current_time
  
 
-def extract_oauth_id_token(text):
+async def extract_oauth_id_token(text):
     # Use regex to find the value of oauth_id_token
     match = re.search(r"oauth_id_token=([^;]+)", text)
     if match:
@@ -196,7 +196,7 @@ def extract_oauth_id_token(text):
         return None
 
 
-def extract_event_info(event_emitter) -> tuple[Optional[str], Optional[str]]:
+async def extract_event_info(event_emitter) -> tuple[Optional[str], Optional[str]]:
     if not event_emitter or not event_emitter.__closure__:
         return None, None
     for cell in event_emitter.__closure__:
