@@ -46,6 +46,7 @@ class Pipe:
         self.name = "c1 Contracts [UAT]"
         self.valves = self.Valves()
         self.last_emit_time = 0
+        self.seen = set()
 
         self.endpoint = "https://dbadnocgpt.documents.azure.com:443/"
         self.key = "uLO7CKicLpAtRQZD8lyyjE8ccWVAZdcc7pwXXnxeCnBvtAsUihpt2M4y9RVdP8heavPrypPT9F5XACDbE9poVw=="
@@ -157,6 +158,10 @@ class Pipe:
                     
                     if items:
                         latest_status = items[0]
+                        if latest_status["id"] in self.seen:
+                            continue
+                        
+                        self.seen.add(latest_status["id"])
                         agent_name = latest_status["agent_name"]
                         print(agent_name)
                         await self.emit_status(__event_emitter__, "info", f"Latest status: {agent_name}", False)
